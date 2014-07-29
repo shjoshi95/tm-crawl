@@ -1,8 +1,8 @@
-#to do: for app date col in trademark_columns, normalize the dates!
+#to do: ask if method comments shoudld be inside or out and with # or '''?
 #remove duplicate columsn from around the database...like OSN
 	#transfer all changes to the mini-database If app...
 
-import urllib2   #used to request info from url's
+import urllib2  			   #used to request info from url's
 from lxml import etree as ET   #xml parsing module
 import re 					   #regular expression module
 import time					   #time tracking module
@@ -13,9 +13,12 @@ ns_tmk = 'http://www.wipo.int/standards/XMLSchema/Trademark/1'	#namespace 1
 ns_com = 'http://www.wipo.int/standards/XMLSchema/Common/1'		#namespace 2
 ns_tmk2 = '{http://www.wipo.int/standards/XMLSchema/Trademark/1}'	#{ns_tmk2}
 ns_com2 = '{http://www.wipo.int/standards/XMLSchema/Common/1}'		#{ns_com2}
-url_part1 = 'https://tsdrapi.uspto.gov/ts/cd/casestatus/sn'		#url segment 1
-url_part2 = '/info.xml'	#url segment 2
 
+#the url segments below form the link to the xml file source online
+url_part1 = 'https://tsdrapi.uspto.gov/ts/cd/casestatus/sn'		#url segment 1
+url_part2 = '/info.xml'											#url segment 2
+
+#these paths are file paths to certain nodes in the xml file parsed from uspto
 path_start_standard = '/tmk:Transaction/tmk:TrademarkTransactionBody \
 			  		   /tmk:TransactionContentBag/tmk:TransactionData \
 					   /tmk:TrademarkBag/tmk:Trademark' 
@@ -26,7 +29,9 @@ path_start_gs_bag = path_start_standard + '/tmk:GoodsServicesBag \
 path_start_national_cor = path_start_standard + '/tmk:NationalCorrespondent'
 path_start_record_attorney = path_start_standard + '/tmk:RecordAttorney' 
 path_start_applicant = path_start_standard + '/tmk:ApplicantBag'
+path_start_nat_trade = path_start_standard + '/tmk:NationalTrademarkInformation'
 
+#each list of elements contains the tags for desired data from the xml tree
 single_elements = ['RegistrationOfficeCode', 'IPOfficeCode', \
 				   'ApplicationNumberText', 'RegistrationNumber', \
 				   'ApplicationDate', 'RegistrationDate', 'FilingPlace', \
@@ -60,11 +65,21 @@ applicant_elements = ['LegalEntityName', 'NationalLegalEntityCode', \
 					  'EntityName', 'EntityNameCategory', 'AddressLineText', \
 					  'AddressLineText2', 'CityName', 'GeographicRegionName',\
 					  'CountryCode', 'PostalCode']
+nat_trade_elements = ['RegisterCategory','AmendedPrincipalRegisterIndicator', \
+					  'AmendedSupplementalRegisterIndicator', \
+					  'MarkCurrentStatusExternalDescriptionText']
 stops = 0	#tracks number of server disconnections
 
+#receives the span of serial numbers to process and parses data from xmls
+#sends this data to the be stored in a database specified in settings.py
 def traverse(span):
 	for trademark in span:
-		tree = make_tree(trademark)
+		tree = make_tree(trademark) #retrieves the xml file as element tree 
+		
+		#each 'data' element contains data collected from a certain node 
+			# of the given xml tree
+		#note: the first variable here, data, contains general elements from 
+			# the root node of the tree
 		data = load_data(tree, path_start_standard)
 		mark_data = load_rep(tree, path_start_mark, mark_elements)
 		gs_bag_data = load_rep(tree, path_start_gs_bag, gs_elements)
@@ -72,15 +87,18 @@ def traverse(span):
 		record_attorney_data = load_data(tree, path_start_record_attorney)
 		applicant_data = load_rep(tree, path_start_applicant, \
 								  applicant_elements)
-
+		nat_trade_data = load_data(tree, path_start_nat_trade)
 
 		to_insert = [data, single_elements, mark_data, mark_elements, \
 					 gs_bag_data, gs_elements, national_cor_data, \
 					 national_cor_elements, record_attorney_data, \
 					 record_attorney_elements, applicant_data, \
-					 applicant_elements]
+					 applicant_elements, nat_trade_data, nat_trade_elements]
+		 #all the data dictionaries and their corresponding tag lists
+		 #are passed to insert(), which stores these fields in postgres
 		insert(to_insert)
 
+#writes the to_write string to the file output in utf-8
 def write(to_write, output):
 	try:
 		output.write(to_write)
@@ -88,6 +106,8 @@ def write(to_write, output):
 		to_write = to_write.encode('utf-8')
 		output.write(to_write)
 
+#accesses the url for the specified serial number and makes a local xml tree
+#returns this tree
 def make_tree(serial):
 	'''This method contructs a unique url based on the serial provided. \
 	   The tree then parses all the information from the url. If the \
@@ -96,7 +116,7 @@ def make_tree(serial):
 	   provides all the information. The variable stops will keep track of \
 	   every time the server unplugs the user.'''
 
-	url = url_part1 + str(serial) + url_part2 #create unique url with serial 
+	url = url_part1 + str(serial) + url_part2 #create unique url with serial #
 	serial_stops = 0
 	while True:
 		try:
@@ -104,11 +124,12 @@ def make_tree(serial):
 			source.add_header('Accept', '*/*')
 			tree = ET.parse(urllib2.urlopen(source))
 			break	
-		except (IOError, httplib.BadStatusLine, urllib2.HTTPError): #if the server breaks the connection --> keep running
+		#if the server breaks the connection --> reconnect and try again
+		except (IOError, httplib.BadStatusLine, urllib2.HTTPError):
 			if serial_stops > 25:
 				return
 			global stops
-			stops += 1 #print how many times this happens
+			stops += 1 #print how many times server breaks
 			serial_stops += 1
 			print "Stops = " + str(stops) + " At serial # " + str(serial) + \
 				  " where Serial_Stops = " + str(serial_stops)
@@ -116,10 +137,12 @@ def make_tree(serial):
 
 	return tree
 
+#method checks the given tree if an attorney exists
+#returns this result as a boolean and the name of the attorney if true
 def check_for_attorney(tree):
 	'''This method checks the xml tree queried and returns whether or 
 	   not an attorney exists in a trademark being searched. If an 
-	   attorney is their, his or her name is also returned. '''
+	   attorney is there, his or her name is also returned. '''
 
 	results = {"AttorneyPresent" : False, "AttorneyName" : ""}
 	person_node = tree.xpath('/tmk:Transaction/tmk:TrademarkTransactionBody \
@@ -142,31 +165,42 @@ def check_for_attorney(tree):
 	results["AttorneyName"] = attorney_name
 	return results
 
+#collects all data from xml tree starting at the node defined by path_initial
+#returns the data as a dictionary
 def load_data(tree, path_initial):
 	info = {}
 	path = path_initial
 
 	try:
 		root = tree.xpath(path, namespaces={'tmk': ns_tmk, 'com': ns_com})
+
 		for element in root[0].iter():
+			#add is the tag of the new piece of info to be added to the info{}
+			#add will be the key, and the new data will be the value
 			if ns_com2 in element.tag:
-				add = element.tag.replace(ns_com2, '') #get rid of namespace from tag
+				#get rid of namespace from tag
+				add = element.tag.replace(ns_com2, '') 
 			if ns_tmk2 in element.tag:
-				add = element.tag.replace(ns_tmk2, '') #get rid of namespace from tag
+				#get rid of namespace from tag
+				add = element.tag.replace(ns_tmk2, '') 
 
 			try:
-				if '\n' in element.text:	#gets rid of unnecessary new lines
+				#gets rid of unnecessary new lines
+				if '\n' in element.text:
 					info[add] = ''
-				else:	#adds the appropriate text otherwise
+				#adds the appropriate text otherwise
+				else:
 
-					if (add in info and ('AddressLineText' in add)):  #if the key, add, already has a defined value
-						info['AddressLineText2'] = element.text #add this new value to old one
+					#if this  key, add, already has a defined value
+					if (add in info and ('AddressLineText' in add)): 
+						#add this new value to old one
+						info['AddressLineText2'] = element.text
 					elif(add in info):
 						pass
 					else:
 						info[add] = element.text
 
-			except TypeError: #simplify this jumbled code in this exception later
+			except TypeError: #simplify this jumbled code in this exception 
 				try:
 					if (info[add] != ''):
 						pass
@@ -179,7 +213,8 @@ def load_data(tree, path_initial):
 
 	return info
 
-
+#identical to load_data(), except this method handles tags that are repeated
+#throughout the xml tree within a certain start_node defined by path_initial
 def load_rep(tree, path_initial, element_set):
 	info = {}
 	path = path_initial
@@ -190,20 +225,27 @@ def load_rep(tree, path_initial, element_set):
 	elements_without_first = elements[1:]
 	sub_elements = elements
 
+	#prepare the info dictionary will all the right keys
+	#inserts a list at each key to store each repeated value encountered
+		#in the tree
 	for item in elements:
 		info[item] = []
 
 
 	try:
 		for element in root[0].iter():
+			#add is the tag of the new piece of info to be added to the info{}
+			#add will be the key, and the new data will be the value
 			if ns_com2 in element.tag:
-				add = element.tag.replace(ns_com2, '') #get rid of namespace from tag
+				#get rid of namespace from tag
+				add = element.tag.replace(ns_com2, '') 
 			if ns_tmk2 in element.tag:
-				add = element.tag.replace(ns_tmk2, '') #get rid of namespace from tag
+				#get rid of namespace from tag
+				add = element.tag.replace(ns_tmk2, '') 
 
 			try:
-
-				if (past_tag == add): #to take care of duplicate tags one after the other in a single repetiton
+				#to take care of duplicate tags one after the other per loop
+				if (past_tag == add):
 					if 'EntityName' == add:
 						info['EntityNameCategory'].append(element.text)
 						past_tag = 'EntityNameCategory'
@@ -217,7 +259,11 @@ def load_rep(tree, path_initial, element_set):
 						info[add].append(element.text)
 						past_tag = add
 
-				if 'ClassificationKindCode' in elements: #fill gaps for gs
+				#a gap is a tag that has no data, but should should thus have 
+				#a value of '' to indicate this instead of a null data type
+
+				#fill gaps for goods and services table
+				if 'ClassificationKindCode' in elements: 
 					if ((add in elements_without_first) \
 						 and len(info[elements[0]]) >= 1):
 						index = len(info[elements[0]]) - 1
@@ -229,7 +275,8 @@ def load_rep(tree, path_initial, element_set):
 							except IndexError:
 								info[item].append('')
 
-				else: #fill gaps for other cases
+				#fill gaps for other cases
+				else: 
 					if ((add in elements_without_first) \
 						 and len(info[elements[0]]) >= 1):
 						index = len(info[elements[0]]) - 1
@@ -242,16 +289,12 @@ def load_rep(tree, path_initial, element_set):
 							except IndexError:
 								info[item].append('')
 
-			except (TypeError, KeyError): #if no text at all there, add blank at that tag
+			#if no text at all there, add blank at that tag
+			except (TypeError, KeyError):
 				info[past_tag].append('') #does program even pass here??
 				print 'here'
 	except IndexError:
 		pass
-
-	#if 'LegalEntityName' in elements:
-	#	for i in range(len(elements)):
-	#		print len(info[elements[i]])
-	#		print info[elements[i]]
 
 	return info
 

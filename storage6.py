@@ -1,9 +1,3 @@
-#Latest Updates:
-#changed the proof_data structure so that everything is '' or null under special circumstances
-#got th M-M table working for applicant trademark
-
-
-
 #TODO
 #normalize phone numbers
 #should some varchars varchars in table creation become text?
@@ -32,6 +26,7 @@ import settings	#settings for database connectivity
 
 def insert(inserted):
 
+	global data
 	data = inserted[0]
 	single_elements = inserted[1]
 	mark_data = inserted[2]
@@ -44,6 +39,8 @@ def insert(inserted):
 	record_attorney_elements = inserted[9]
 	applicant_data = inserted[10]
 	applicant_elements = inserted[11]
+	nat_trade_data = inserted[12]
+	nat_trade_elements = inserted[13]
 
 	conn = psycopg2.connect(database = settings.database(), 
 							user = settings.user(), 
@@ -56,6 +53,7 @@ def insert(inserted):
 	record_attorney_data = proof_data(record_attorney_data, 
 									  record_attorney_elements)
 	applicant_data = proof_data(applicant_data, applicant_elements)
+	nat_trade_data = proof_data(nat_trade_data, nat_trade_elements)
 
 	cur = conn.cursor() #Initiate the cursor which executes postgres commands
 	#cur.execute('''drop table if exists ''' + table_out +';') #Remove old table
@@ -145,7 +143,11 @@ def insert(inserted):
 				mark_category                             VARCHAR(25), 
 				mark_feature_category                     VARCHAR(100), 
 				first_used_date                           DATE, 
+				blank_month_1							  BOOLEAN,
+				blank_day_1								  BOOLEAN,
 				first_used_commerce_date                  DATE, 
+				blank_month_2							  BOOLEAN,
+				blank_day_2								  BOOLEAN,
 				publication_identifier                    VARCHAR(100), 
 				publication_date                          DATE, 
 				class_number                              VARCHAR(5), 
@@ -173,7 +175,11 @@ def insert(inserted):
 				mark_category, 
 				mark_feature_category, 
 				first_used_date, 
+				blank_month_1,
+				blank_day_1,
 				first_used_commerce_date, 
+				blank_month_2,
+				blank_day_2,
 				publication_identifier, 
 				publication_date, 
 				class_number, 
@@ -183,7 +189,8 @@ def insert(inserted):
 				national_status_external_description_text
 			) 
 			SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-				   %s, %s, %s, %s, %s, %s, %s, %s, %s 
+				   %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+				   %s, %s, %s
 		   	FROM lawyer 
 		   	WHERE lawyer.email_address_text LIKE %s 
 		   	AND NOT EXISTS 
@@ -204,7 +211,11 @@ def insert(inserted):
 				data['MarkCategory'], 
 				data['MarkFeatureCategory'], 
 				data['FirstUsedDate'], 
+				data['BlankMonth1'],
+				data['BlankDay1'],
 				data['FirstUsedCommerceDate'], 
+				data['BlankMonth2'],
+				data['BlankDay2'],
 				data['PublicationIdentifier'], 
 				data['PublicationDate'], 
 				data['ClassNumber'], 
@@ -222,7 +233,7 @@ def insert(inserted):
 		'''CREATE TABLE IF NOT EXISTS word_mark 
 			( 
 				id                                   SERIAL PRIMARY KEY, 
-				mark_verbal_element_text             VARCHAR(1000) NOT NULL, 
+				mark_verbal_element_text             VARCHAR(1000), 
 				mark_significant_verbal_element_text VARCHAR(1000), 
 				mark_standard_character_indicator    BOOLEAN 
   			); '''
@@ -303,7 +314,7 @@ def insert(inserted):
 			( 
 				id         SERIAL PRIMARY KEY, 
 				mark_sound VARCHAR(1000) 
-			); '''
+			);'''
 	)
 
 	#insert into sound_mark
@@ -577,6 +588,55 @@ def insert(inserted):
 				)
 		)
 
+
+	cur.execute(
+		'''CREATE TABLE IF NOT EXISTS national_trademark
+  			(
+		     id                                            SERIAL PRIMARY KEY,
+		     register_category                             TEXT,
+		     amended_principal_register_indicator          BOOLEAN,
+		     amended_supplemental_register_indicator       BOOLEAN,
+		     mark_current_status_external_description_text TEXT
+  			); '''
+	)
+
+	cur.execute(
+		'''INSERT INTO national_trademark
+			(
+				register_category,
+				amended_principal_register_indicator,
+				amended_supplemental_register_indicator,
+				mark_current_status_external_description_text
+			)
+			SELECT %s, %s, %s, %s
+			WHERE NOT EXISTS
+			(
+				SELECT
+				(
+					register_category,
+					amended_principal_register_indicator,
+					amended_supplemental_register_indicator,
+					mark_current_status_external_description_text
+				)
+				FROM national_trademark
+				WHERE register_category LIKE %s
+				AND amended_principal_register_indicator = %s
+				AND amended_supplemental_register_indicator = %s
+				AND mark_current_status_external_description_text LIKE %s
+			)''',
+			(
+				nat_trade_data['RegisterCategory'],
+				nat_trade_data['AmendedPrincipalRegisterIndicator'],
+				nat_trade_data['AmendedSupplementalRegisterIndicator'],
+				nat_trade_data['MarkCurrentStatusExternalDescriptionText'],
+				nat_trade_data['RegisterCategory'],
+				nat_trade_data['AmendedPrincipalRegisterIndicator'],
+				nat_trade_data['AmendedSupplementalRegisterIndicator'],
+				nat_trade_data['MarkCurrentStatusExternalDescriptionText']
+			)
+	)
+
+
 	#TABLE CONNECTIONS
 	#TABLE CONNECTIONS
 	#TABLE CONNECTIONS
@@ -591,8 +651,8 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_word_mark 
 			(
-				trademark_id integer, 
-				word_mark_id integer, 
+				trademark_id 					INTEGER, 
+				word_mark_id 					INTEGER, 
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
 					REFERENCES trademark (id) 
@@ -646,8 +706,8 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_image_mark 
 			(
-				trademark_id integer, 
-				image_mark_id integer, 
+				trademark_id 					INTEGER, 
+				image_mark_id 					INTEGER, 
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
 					REFERENCES trademark (id) 
@@ -695,8 +755,8 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_sound_mark 
 			(
-				trademark_id integer, 
-				sound_mark_id integer, 
+				trademark_id 					INTEGER, 
+				sound_mark_id 					INTEGER, 
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
 					REFERENCES trademark (id) 
@@ -743,9 +803,9 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_lawyer
 			(
-				trademark_id integer,
-				lawyer_id integer,
-				application_date date,
+				trademark_id 					INTEGER,
+				lawyer_id 						INTEGER,
+				application_date 				DATE,
 				CONSTRAINT trademark_id_fk
 					FOREIGN KEY (trademark_id)
 					REFERENCES trademark (id)
@@ -797,8 +857,8 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_current_basis
 			(
-				trademark_id integer,
-				current_basis_id integer,
+				trademark_id 						INTEGER,
+				current_basis_id 					INTEGER,
 				CONSTRAINT trademark_id_fk
 					FOREIGN KEY (trademark_id)
 					REFERENCES trademark (id)
@@ -853,9 +913,9 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_mark_event
 			(
-				trademark_id integer,
-				mark_event_id integer,
-				mark_event_date date,
+				trademark_id 					INTEGER,
+				mark_event_id 					INTEGER,
+				mark_event_date 				DATE,
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
 					REFERENCES trademark (id) 
@@ -917,8 +977,8 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_gs_bag
 			(
-				trademark_id integer,
-				gs_bag_id integer,
+				trademark_id 					INTEGER,
+				gs_bag_id 						INTEGER,
 
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
@@ -971,9 +1031,9 @@ def insert(inserted):
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_applicant
 			(
-				trademark_id integer,
-				applicant_id integer,
-				applicant_role text,
+				trademark_id 					INTEGER,
+				applicant_id 					INTEGER,
+				applicant_role 					TEXT,
 				CONSTRAINT trademark_id_fk 
 					FOREIGN KEY (trademark_id) 
 					REFERENCES trademark (id) 
@@ -1031,6 +1091,60 @@ def insert(inserted):
 					applicant_data['CommentText'][i]
 				)
 		)
+
+	cur.execute(
+		'''CREATE TABLE IF NOT EXISTS trademark_national_trademark
+			(
+				trademark_id 							INTEGER,
+				national_trademark_id 					INTEGER,
+				CONSTRAINT trademark_id_fk 
+					FOREIGN KEY (trademark_id) 
+					REFERENCES trademark (id) 
+					MATCH SIMPLE 
+					ON UPDATE CASCADE 
+					ON DELETE CASCADE, 
+				CONSTRAINT national_trademark_id_fk
+					FOREIGN KEY (national_trademark_id) 
+					REFERENCES national_trademark (id) 
+					MATCH SIMPLE 
+					ON UPDATE CASCADE 
+					ON DELETE CASCADE 
+			);'''
+	)
+
+	cur.execute(
+		'''INSERT INTO trademark_national_trademark
+			(
+				trademark_id,
+				national_trademark_id
+			)
+			SELECT trademark.id, national_trademark.id
+			FROM trademark 
+			CROSS JOIN national_trademark
+			WHERE serial_number = %s
+			AND register_category LIKE %s
+			AND amended_principal_register_indicator = %s
+			AND amended_supplemental_register_indicator = %s
+			AND mark_current_status_external_description_text LIKE %s
+			AND NOT EXISTS
+			(
+				SELECT
+				(
+					trademark_id,
+					national_trademark_id
+				)
+				FROM trademark_national_trademark
+				WHERE trademark_id = trademark.id
+				AND national_trademark_id = national_trademark.id
+			)''',
+			(
+				data['ApplicationNumberText'],
+				nat_trade_data['RegisterCategory'],
+				nat_trade_data['AmendedPrincipalRegisterIndicator'],
+				nat_trade_data['AmendedSupplementalRegisterIndicator'],
+				nat_trade_data['MarkCurrentStatusExternalDescriptionText']
+			)
+	)
 
 	#insert into ^ this table now with the appropriate values and take out
 	#trademark_id and comment text from the applicant table!
@@ -1099,10 +1213,17 @@ def proof_data(data, tags):
 				'BasisForeignRegistrationIndicator', 'NoBasisIndicator', 
 				'BasisIntentToUseIndicator']
 	numbers = ['MarkEventEntryNumber', 'ClassNumber', 'NationalClassNumber']
-	#numbers = []
+
 	could_be_none = [dates, booleans, numbers]
 	required_tags = tags
 	
+	#Add these override columsn when dates have 00 elements
+	if ('ApplicationNumberText' in tags):
+		data['BlankMonth1'] = 'false' 	
+		data['BlankDay1'] = 'false'	
+		data['BlankMonth2'] = 'false'
+		data['BlankDay2'] = 'false'		
+
 	for i in range(len(required_tags)):
 
 		try:
@@ -1136,11 +1257,6 @@ def proof_data(data, tags):
 				value = sample
 				data[required_tags[i]] = format_date(value, required_tags[i])
 
-		# if (required_tags[i] == 'PhoneNumber' or
-		# 	required_tags[i] == 'FaxNumber'):
-
-		# 	if
-
 
 	return data
 
@@ -1155,10 +1271,20 @@ def format_date(given_date, key): #for unformatted dates, and dates w/o times
 
 	if (day == '00' or month == '00'):
 		new_date = year + '-' + '01' + '-' + '01'
+		if (key == 'FirstUsedDate'):
+			if (month == '00'):
+				data['BlankMonth1'] = 'true' #if firstuseddate month = '00'
+			if (day == '00'):
+				data['BlankDay1'] = 'true' #if firstuseddate day = '00'
+		if (key in 'FirstUsedCommerceDate'):
+			if (month == '00'):
+				data['BlankMonth2'] = 'true' #if firstcommercedate month = '00'
+			if (day == '00'):
+				data['BlankDay2'] = 'true' #if firstcommercedate month = '00'
 	else:
 		new_date = year + '-' + month + '-' + day
 
-	return new_date
+	return new_date 
 
 	#except KeyError: #for when a tag is missing altogether
 	#print 'here' + ' ' + required_tags[i]
