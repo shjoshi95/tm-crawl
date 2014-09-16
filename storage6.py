@@ -1,31 +1,37 @@
-#TODO
-#normalize phone numbers
-#should some varchars varchars in table creation become text?
-#fix the date problem with the 00 as the day in 86080970(day)/86182018(month) firstuseddate
-#check trademark.id in the insert into mark_event
-#should application date stay in the trademark_lawyer table; if so, delete 
-	#this from trademark, else delete application date from trademark_lawyer
-	#do the same for the mark_event_date from trademark_mark_event
-#delete columns from current basis and trademark_current basis that have no data
-#add semi colons to ends of insert into statements?
-#for the cross join sections, should I provide explicit table cast names (i.e
-	#table.columnname rather than just the column name if both tables have the same column.)
+# Written by Shreyes H. Joshi, Princeton University
+
+
+# TODO
+# normalize phone numbers
+# should some varchars varchars in table creation become text?
+# fix the date problem with the 00 as the day in 86080970(day)/86182018(month) firstuseddate
+# check trademark.id in the insert into mark_event
+# should application date stay in the trademark_lawyer table; if so, delete 
+	# this from trademark, else delete application date from trademark_lawyer
+	# do the same for the mark_event_date from trademark_mark_event
+# delete columns from current basis and trademark_current basis that have no data
+# add semi colons to ends of insert into statements?
+# for the cross join sections, should I provide explicit table cast names (i.e
+	# table.columnname rather than just the column name if both tables have the same column.)
 
 
 
 
-#Formatting:
-#in create table statements make all data types uniform with longest string
-#make all table names singular
-#take out all redundant clauses like info and data in var names
-#make the column names simpler
+# Formatting:
+# in create table statements make all data types uniform with longest string
+# make all table names singular
+# take out all redundant clauses like info and data in var names
+# make the column names simpler
 
-import psycopg2 #required for python --> postgres connection
-import re  		#required for regular expression manipulation
-import settings	#settings for database connectivity
+import psycopg2 # required for python --> postgres connection
+import re  		# required for regular expression manipulation
+import settings	# settings for database connectivity
 
+# This method creates and inserts all data into the database
+# no return type
 def insert(inserted):
 
+	# assigning variables from inserted
 	global data
 	data = inserted[0]
 	single_elements = inserted[1]
@@ -42,10 +48,12 @@ def insert(inserted):
 	nat_trade_data = inserted[12]
 	nat_trade_elements = inserted[13]
 
+ 	# connect to the postgres database
 	conn = psycopg2.connect(database = settings.database(), 
 							user = settings.user(), 
-							password = settings.password()) #Connect database
+							password = settings.password()) # Connect database
 	
+	# format all the datafields
 	data = proof_data(data, single_elements)
 	mark_data = proof_data(mark_data, mark_elements)
 	gs_bag_data = proof_data(gs_bag_data, gs_elements)
@@ -55,13 +63,15 @@ def insert(inserted):
 	applicant_data = proof_data(applicant_data, applicant_elements)
 	nat_trade_data = proof_data(nat_trade_data, nat_trade_elements)
 
-	cur = conn.cursor() #Initiate the cursor which executes postgres commands
-	#cur.execute('''drop table if exists ''' + table_out +';') #Remove old table
-	#make lawyer table
+	# create a cursor which can execute postgres commands
+	cur = conn.cursor() # Initiate the cursor which executes postgres commands
+	# cur.execute('''drop table if exists ''' + table_out +';') # Remove old table
+	# make lawyer table
 
 
 	print data['ApplicationNumberText']
 
+	# create lawyer table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS lawyer 
 			( 
@@ -83,6 +93,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into lawyer table
 	cur.execute(
 		'''INSERT INTO lawyer 
 			(
@@ -127,7 +138,7 @@ def insert(inserted):
 			)
 	)
 
-	#make trademark table
+	# create trademark table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark 
 			(		 
@@ -159,8 +170,7 @@ def insert(inserted):
 	)
 
 
-	#insert into trademark table
-
+	# insert into trademark table
 	cur.execute(
 		'''INSERT INTO trademark 
 			(
@@ -228,7 +238,7 @@ def insert(inserted):
 			)
 	)
 	
-	#make word_mark
+	# create word_mark table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS word_mark 
 			( 
@@ -239,7 +249,7 @@ def insert(inserted):
   			); '''
 	)
 
-	#insert into word_mark
+	# insert into word_mark table
 	if (data['MarkVerbalElementText'] is None):
 		data['MarkVerbalElementText'] = 'No word_mark available'
 
@@ -265,7 +275,7 @@ def insert(inserted):
 			)
 	)
 
-	#make image_mark
+	# create image_mark table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS image_mark 
 			( 
@@ -277,8 +287,7 @@ def insert(inserted):
 			);'''
 	)
 
-	#insert into image_mark
-	
+	# insert into image_mark table
 	if (data['MarkVerbalElementText'] is None):
 		image_file = 'No image available'
 	else:
@@ -308,7 +317,7 @@ def insert(inserted):
 			)
 	)
 
-	#make sound_mark
+	# create sound_mark table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS sound_mark 
 			( 
@@ -317,8 +326,7 @@ def insert(inserted):
 			);'''
 	)
 
-	#insert into sound_mark
-
+	# insert into sound_mark table
 	if (data['MarkSound'] is None):
 		data['MarkSound'] = 'No sound_mark available'
 
@@ -340,7 +348,7 @@ def insert(inserted):
 			)
 	)
 
-	#make current_basis
+	# create current_basis table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS current_basis 
 			( 
@@ -353,7 +361,7 @@ def insert(inserted):
 			);'''
 	)
 
-	#insert into current_basis
+	# insert into current_basis table
 	cur.execute(
 		'''INSERT INTO current_basis 
 			(
@@ -398,6 +406,7 @@ def insert(inserted):
 			)
 	)
 
+	# create mark event table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS mark_event 
 			( 
@@ -411,6 +420,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into mark event table
 	for i in range(len(mark_data.values()[0])):
 
 		cur.execute(
@@ -458,10 +468,8 @@ def insert(inserted):
 					mark_data['MarkEventAdditionalText'][i]
 				)
 		)
-				   
-				   #Is the second trademark.id call legal? 
-				   #Or do I need to do the full SELECT again?
 
+	# create goods and services table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS gs_bag 
 			( 
@@ -472,6 +480,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into goods and services table
 	for i in range(len(gs_bag_data.values()[0])):
 
 		cur.execute(
@@ -506,8 +515,9 @@ def insert(inserted):
 					gs_bag_data['NationalClassNumber'][i]
 				)
 		)
-				   #Is the second trademark.id call legal? Or do I need to do the full SELECT again?
 
+
+	# create applicant table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS applicant 
 			( 
@@ -528,6 +538,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into applicant table
 	for i in range(len(applicant_data.values()[0])):
 
    		cur.execute(
@@ -588,7 +599,7 @@ def insert(inserted):
 				)
 		)
 
-
+	# create national trademark information table
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS national_trademark
   			(
@@ -600,6 +611,7 @@ def insert(inserted):
   			); '''
 	)
 
+	# insert into national trademark information table
 	cur.execute(
 		'''INSERT INTO national_trademark
 			(
@@ -636,18 +648,18 @@ def insert(inserted):
 			)
 	)
 
+	# all join tables connecting every table to trademarks table
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
+	# TABLE CONNECTIONS
 
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS for the many-many in word, image, and sound!
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-	#TABLE CONNECTIONS
-
-	#connect trademark to word_mark
+	# create trademark_word_mark table
+	# connects trademark to word_mark
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_word_mark 
 			(
@@ -667,10 +679,8 @@ def insert(inserted):
 					ON DELETE CASCADE
 			);'''
 	)
-	#example with Values insert
-	#cur.execute('''INSERT INTO trademark_word_mark (trademark_id, word_mark_id) VALUES 
-	#			   (currval('trademark_id_seq'), currval('word_mark_id_seq'));''')
 
+	# insert into trademark_word_mark
    	cur.execute(
    		'''INSERT INTO trademark_word_mark 
    			(
@@ -699,10 +709,11 @@ def insert(inserted):
 			)
 	) 
 
-   	#note, the argument list must always be a LIST (even single tuple)!
-	#id FROM trademark WHERE serial_number = %s
+   	# note, the argument list must always be a LIST (even single tuple)!
+	# id FROM trademark WHERE serial_number = %s
 
-	#connect trademark to image_mark
+	# create trademark_image_mark table
+	# connects trademark to image_mark
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_image_mark 
 			(
@@ -723,6 +734,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_image_mark
 	cur.execute(
 		'''INSERT INTO trademark_image_mark 
 			(
@@ -751,7 +763,8 @@ def insert(inserted):
 			)
 	) 
 
-    #connect trademark to sound_mark
+    # create trademark_sound_mark table
+	# connects trademark to sound_mark
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_sound_mark 
 			(
@@ -772,6 +785,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_sound_mark
 	cur.execute(
 		'''INSERT INTO trademark_sound_mark 
 			(
@@ -800,6 +814,8 @@ def insert(inserted):
 			)
 	) 	
 
+	# create trademark_lawyer table
+	# connects trademark to lawyer
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_lawyer
 			(
@@ -821,6 +837,7 @@ def insert(inserted):
 			);'''
 	)
 	
+	# insert into trademark_lawyer
 	cur.execute(
 		'''INSERT INTO trademark_lawyer
 			(
@@ -854,6 +871,8 @@ def insert(inserted):
 			)
 	)
 
+	# create trademark_current_basis table
+	# connects trademark to current_basis
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_current_basis
 			(
@@ -874,6 +893,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_current_basis
 	cur.execute(
 		'''INSERT INTO trademark_current_basis
 			(
@@ -910,6 +930,8 @@ def insert(inserted):
 			)
 	)
 
+	# create trademark_mark_event table
+	# connects trademark to mark_event
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_mark_event
 			(
@@ -931,6 +953,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_mark_event
 	for i in range(len(mark_data.values()[0])):
 
 		cur.execute(
@@ -974,6 +997,8 @@ def insert(inserted):
 				)
 		)
 
+	# create trademark_gs_bag table
+	# connects trademark to gs_bag
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_gs_bag
 			(
@@ -995,6 +1020,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_gs_bag
 	for i in range(len(gs_bag_data.values()[0])):
 
 		cur.execute(
@@ -1028,6 +1054,8 @@ def insert(inserted):
 				)
 		)
 
+	# create trademark_applicant table
+	# connects trademark to applicant
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_applicant
 			(
@@ -1049,6 +1077,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_applicant
 	for i in range(len(applicant_data.values()[0])):
 
 		cur.execute(
@@ -1092,6 +1121,8 @@ def insert(inserted):
 				)
 		)
 
+	# create trademark_national_trademark table
+	# connects trademark to nationa_trademark
 	cur.execute(
 		'''CREATE TABLE IF NOT EXISTS trademark_national_trademark
 			(
@@ -1112,6 +1143,7 @@ def insert(inserted):
 			);'''
 	)
 
+	# insert into trademark_national_trademark
 	cur.execute(
 		'''INSERT INTO trademark_national_trademark
 			(
@@ -1145,12 +1177,9 @@ def insert(inserted):
 				nat_trade_data['MarkCurrentStatusExternalDescriptionText']
 			)
 	)
-
-	#insert into ^ this table now with the appropriate values and take out
-	#trademark_id and comment text from the applicant table!
 	
 
-	conn.commit() #validate all changes and communicate them to postgres
+	conn.commit() # validate all changes and commit them to postgres
 	conn.close()
 
 
@@ -1177,22 +1206,22 @@ def insert(inserted):
 
 
 
-
+#  This method takes in an index to read in the string contents. 
+#  Because each row may or may not have an element in the TM5 
+#  column, this method considers the cases of whether it does or 
+#  not and calculates the values of fifth_in, sixth_in, and 
+#  seventh_in, (the inputs to the table's database), and returns 
+#  them in a list called response.
+#  returns a list of converted values
 def convert(index, contents):
-	'''This method takes in an index to read in the string contents. 
-	Because each row may or may not have an element in the TM5 
-	column, this method considers the cases of whether it does or 
-	not and calculates the values of fifth_in, sixth_in, and 
-	seventh_in, (the inputs to the table's database), and returns 
-	them in a list called response.'''
 
-	if (contents[index] != 'T' and contents[index] != 't'): #if there is no T
+	if (contents[index] != 'T' and contents[index] != 't'): # if there is no T
 		fifth_in = ''
 		find = re.match('(\d)*'+'/(\d)*/'+ '(\d)*' + ' ', contents[index:])
-		date = find.group() #extract contents from regular expression above
+		date = find.group() # extract contents from regular expression above
 		revise = contents[index:].replace(date, '')
 
-	else: #if there is a T
+	else: # if there is a T
 		fifth_in = 'T'
 		find = re.match('(\d)*'+'/.*/'+ '(\d)*' + ' ', contents[(index+2):])
 		date = find.group()
@@ -1200,9 +1229,16 @@ def convert(index, contents):
 
 	sixth_in = date
 	seventh_in = revise
-	response = [fifth_in, sixth_in, seventh_in] #list of desired values
+	response = [fifth_in, sixth_in, seventh_in] # list of desired values
 	return response
 
+
+# Checks through the data dictionary passed and makes sure every one
+# has the tags that it is supposed to. If they are missing, that tag 
+# is given a NULL (None) value if it is a date, boolean, or integer
+# type, and is given a '' value otherwise. This method prepares all 
+# data to be stored in the database
+# returns the formatted data dictionary
 def proof_data(data, tags):
 	
 	dates = ['ApplicationDate', 'RegistrationDate', 'MarkCurrentStatusDate', 
@@ -1217,7 +1253,7 @@ def proof_data(data, tags):
 	could_be_none = [dates, booleans, numbers]
 	required_tags = tags
 	
-	#Add these override columsn when dates have 00 elements
+	# Add these override columsn when dates have 00 elements
 	if ('ApplicationNumberText' in tags):
 		data['BlankMonth1'] = 'false' 	
 		data['BlankDay1'] = 'false'	
@@ -1257,13 +1293,11 @@ def proof_data(data, tags):
 				value = sample
 				data[required_tags[i]] = format_date(value, required_tags[i])
 
-
 	return data
 
-#def format_phone_number(given_number):
-
-
-def format_date(given_date, key): #for unformatted dates, and dates w/o times
+# formats all dates at a specified key tag from the XML
+# returns the formatted data string
+def format_date(given_date, key): # for unformatted dates, and dates w/o times
 
 	year = given_date[:4]
 	month = given_date[4:6]
@@ -1273,23 +1307,22 @@ def format_date(given_date, key): #for unformatted dates, and dates w/o times
 		new_date = year + '-' + '01' + '-' + '01'
 		if (key == 'FirstUsedDate'):
 			if (month == '00'):
-				data['BlankMonth1'] = 'true' #if firstuseddate month = '00'
+				data['BlankMonth1'] = 'true' # if firstuseddate month = '00'
 			if (day == '00'):
-				data['BlankDay1'] = 'true' #if firstuseddate day = '00'
+				data['BlankDay1'] = 'true' # if firstuseddate day = '00'
 		if (key in 'FirstUsedCommerceDate'):
 			if (month == '00'):
-				data['BlankMonth2'] = 'true' #if firstcommercedate month = '00'
+				data['BlankMonth2'] = 'true' # if firstcommercedate month = '00'
 			if (day == '00'):
-				data['BlankDay2'] = 'true' #if firstcommercedate month = '00'
+				data['BlankDay2'] = 'true' # if firstcommercedate month = '00'
 	else:
 		new_date = year + '-' + month + '-' + day
 
 	return new_date 
 
-	#except KeyError: #for when a tag is missing altogether
-	#print 'here' + ' ' + required_tags[i]
-	#	return None
-
+# indicates whether the key passed in should recieve a '' or a NULL(None) value 
+# if it is missing from the data file that was passed in.
+# returns the boolean result of this ^
 def check_none(could_be_none, key):
 	result = False
 
@@ -1299,9 +1332,11 @@ def check_none(could_be_none, key):
 
 	return result
 
+
+#  This method finds and returns the application date from the 
+#  serial number used within the XML tree.
+# returns the date string needed
 def get_date(data):
-	'''This method finds and returns the application date from the 
-	   serial number used within the XML tree.'''
 
 	try:
 		date_initial = data['ApplicationDate']
@@ -1310,17 +1345,20 @@ def get_date(data):
 	except IndexError:
 		date_initial = ''
 
-	date_middle = re.match('.*-.*-.*-', date_initial) #collect date segment
+	# collect date segment
+	date_middle = re.match('.*-.*-.*-', date_initial)
 	try:
 		date = date_middle.group()
-		date = date[:-1] #chop off extra char (last one)
+		date = date[:-1] # chop off extra char (last one)
 	except AttributeError:
 		date = None
 	return date
 
+# scrapes the website postion of any given email address
+# returns the website string
 def get_website(email):
 	try:
-		get_web = re.match('.*@', email) #print site name
+		get_web = re.match('.*@', email) # print site name
 		scrap = get_web.group()
 		website = email.replace(scrap, '')
 	except AttributeError:
@@ -1328,6 +1366,7 @@ def get_website(email):
 
 	return website
 
+# This method returns the last character of the string inputted
+# returns the last character
 def last(string_in):
-	#This method returns the last character of the string inputted
 	return string_in[len(string_in) - 1]
